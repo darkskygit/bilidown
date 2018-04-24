@@ -3,13 +3,13 @@
     <ActionBar class="action-bar btn-primary" title="哔哩下载工具"/>
     <StackLayout>
       <Button class="btn btn-primary" @tap="clipbroad">clipbroad</Button>
-      <StackLayout v-if="downloadlist">
+      <StackLayout v-if="dllist">
         <FlexboxLayout justifyContent="center">
-          <Label :text="downloadlist.title" />
+          <Label :text="dllist.title" />
         </FlexboxLayout>
-        <ListView for="item in downloadlist.pages">
+        <ListView v-if="itemlist" for="item in itemlist">
           <v-template>
-            <Button class="btn btn-primary" @tap="onButtonTap(item)">{{item.page + '|' + item.part}}</Button>
+            <Button class="btn btn-primary" @tap="onButtonTap(item)">{{ itemtitle(item) }}</Button>
           </v-template>
         </ListView>
       </StackLayout>
@@ -19,7 +19,6 @@
 
 <script>
 import { getText } from "nativescript-clipboard";
-
 import * as platform from "tns-core-modules/platform";
 import * as color from "tns-core-modules/color";
 import { android } from "tns-core-modules/application";
@@ -43,15 +42,14 @@ class BilibiliApi {
     return getJSON(`${url}&sign=${this.GenSign(url, this.appSecret())}`);
   }
   static BengumiInfo(source_id) {
-    return getJSON(
-      `https://bangumi.bilibili.com/view/web_api/season?season_id=${source_id}`
-    );
+    let url = `https://bangumi.bilibili.com/view/web_api/season?season_id=${source_id}`;
+    return getJSON(url);
   }
   static EPBengumiInfo(source_id) {
     return getString(`https://www.bilibili.com/bangumi/play/ep${source_id}`)
       .then(content => {
         let match = content.match(/ss(\d+)/);
-        if (Array.isArray(match)) return match[0];
+        if (Array.isArray(match)) return match[0].match(/\d{1,9}/)[0];
       })
       .then(source_id => {
         if (!isNaN(source_id)) {
@@ -64,8 +62,17 @@ class BilibiliApi {
 export default {
   data() {
     return {
-      downloadlist: null
+      dllist: null
     };
+  },
+  computed: {
+    itemlist() {
+      if (this.dllist && typeof this.dllist === "object") {
+        if (this.dllist.episodes) this.dllist.isEp = true;
+        return this.dllist.pages || this.dllist.episodes;
+      }
+      return false;
+    }
   },
   mounted() {
     this.updateBarColor("#2EBCFF");
@@ -85,23 +92,31 @@ export default {
       }
     },
     clipbroad() {
-      getText().then(content => {
-        let info = this.GetLinkInfo("ep183799");
-        console.log(info)
-      });
+      // getText().then(content => {
+      //   let info = this.GetLinkInfo("ep183799");
+      //   console.log("GetLinkInfo", info)
+      // });
+      this.GetLinkInfo("ep183799").then(data => console.log(this.dllist = data));
     },
     GetLinkInfo(content) {
       if (typeof content !== "string") return;
       let source_id = content.match(/\d{1,9}/);
       if (!isNaN(source_id)) {
-        let promise = GetLinkProcesser(content)(source_id);
-        promise.then(ret => (this.downloadlist = ret.data));
+        let promise = this.Processer(content)(source_id);
+        return promise.then(({ data, result }) => data || result);
       }
+    },
+    Processer(content) {
+      return this.GetLinkProcesser(content).bind(BilibiliApi);
     },
     GetLinkProcesser(content) {
       if (content.indexOf("av") !== -1) return BilibiliApi.VideoInfo;
-      else if (content.indexOf("ep")) return BilibiliApi.EPBengumiInfo;
+      else if (content.indexOf("ep") !== -1)
+        return BilibiliApi.EPBengumiInfo;
       else return BilibiliApi.BengumiInfo;
+    },
+    itemtitle(item) {
+      return (item.index || item.page) + "|" + (item.part || item.index_title);
     },
     onButtonTap(item) {
       console.log(item);
