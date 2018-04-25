@@ -8,7 +8,8 @@
     "build": "webpack --env.tnsAction build --env.android",
     "debug": "webpack --watch --env.tnsAction debug --env.android",
     "watch": "webpack --watch --env.tnsAction run --env.android",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "cd": "npm run clean && npm run debug"
   },
   "dependencies": {
     "js-md5": "^0.7.3",
