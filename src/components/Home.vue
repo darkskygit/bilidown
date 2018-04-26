@@ -27,48 +27,23 @@ import { alert } from "tns-core-modules/ui/dialogs";
 import md5 from "js-md5";
 
 class BilibiliApi {
-  static GetClientType() {
+  constructor(content) {
+    this.content = content;
+    return { api: this, info: this.GetLinkInfo() };
+  }
+  GetClientType() {
     return ["tv.danmaku.bili", "com.bilibili.app.blue", "com.bilibili.app.in"];
   }
-  static GetClientPackage(type) {
+
+  GetClientPackage(type) {
     return this.GetClientType()[type];
   }
-  static GetAppPath(type) {
+
+  GetAppPath(type) {
     return `/sdcard/Android/data/${this.GetClientPackage(type)}/`;
   }
-  static AppSecret() {
-    return "560c52ccd288fed045859ed18bffd973";
-  }
-  static GenSign(url, secret) {
-    if (typeof url !== "string" || url.length === 0) return;
-    let length = url.indexOf("?", 4);
-    if (length === -1) return;
-    let params = url.substring(length + 1);
-    let sort = params.split("&").sort();
-    return md5(sort.join("&") + secret);
-  }
-  static VideoInfo(source_id) {
-    let url = `http://app.bilibili.com/x/view?aid=${source_id}&appkey=1d8b6e7d45233436&build=521000&ts=${new Date().getTime() /
-      1000}`;
-    return getJSON(`${url}&sign=${this.GenSign(url, this.AppSecret())}`);
-  }
-  static BengumiInfo(source_id) {
-    let url = `https://bangumi.bilibili.com/view/web_api/season?season_id=${source_id}`;
-    return getJSON(url);
-  }
-  static EPBengumiInfo(source_id) {
-    return getString(`https://www.bilibili.com/bangumi/play/ep${source_id}`)
-      .then(content => {
-        let match = content.match(/ss(\d+)/);
-        if (Array.isArray(match)) return match[0].match(/\d{1,9}/)[0];
-      })
-      .then(source_id => {
-        if (!isNaN(source_id)) {
-          return this.BengumiInfo(source_id);
-        }
-      });
-  }
-  static GetQuality(qtype) {
+
+  GetQuality(qtype) {
     const quality = [
       {
         quality: "lua.mp4.bb2api.16",
@@ -97,7 +72,69 @@ class BilibiliApi {
     ];
     return quality[qtype];
   }
-  static GenDownItem(qtype, item, data) {
+
+  GetSourceId() {
+    return this.orig_source_id;
+  }
+
+  AppSecret() {
+    return "560c52ccd288fed045859ed18bffd973";
+  }
+
+  GenSign(url, secret) {
+    if (typeof url !== "string" || url.length === 0) return;
+    let length = url.indexOf("?", 4);
+    if (length === -1) return;
+    let params = url.substring(length + 1);
+    let sort = params.split("&").sort();
+    return md5(sort.join("&") + secret);
+  }
+  VideoInfo() {
+    let url = `http://app.bilibili.com/x/view?aid=${
+      this.source_id
+    }&appkey=1d8b6e7d45233436&build=521000&ts=${new Date().getTime() / 1000}`;
+    return getJSON(`${url}&sign=${this.GenSign(url, this.AppSecret())}`);
+  }
+  BengumiInfo() {
+    let url = `https://bangumi.bilibili.com/view/web_api/season?season_id=${
+      this.source_id
+    }`;
+    return getJSON(url);
+  }
+  EPBengumiInfo() {
+    return getString(
+      `https://www.bilibili.com/bangumi/play/ep${this.source_id}`
+    )
+      .then(content => {
+        let match = content.match(/ss(\d+)/);
+        if (Array.isArray(match)) return match[0].match(/\d{1,9}/)[0];
+      })
+      .then(source_id => {
+        if (!isNaN(source_id)) {
+          this.source_id = source_id;
+          return this.BengumiInfo();
+        }
+      });
+  }
+
+  GetLinkInfo() {
+    if (typeof this.content !== "string") return;
+    let source_id = this.content.match(/\d{1,9}/);
+    if (!isNaN(source_id)) {
+      this.source_id = source_id;
+      this.orig_source_id = source_id;
+      let promise = this.GetLinkProcesser();
+      return promise.then(({ data, result }) => data || result);
+    }
+  }
+
+  GetLinkProcesser() {
+    if (this.content.indexOf("av") !== -1) return this.VideoInfo();
+    else if (this.content.indexOf("ep") !== -1) return this.EPBengumiInfo();
+    else return this.BengumiInfo();
+  }
+
+  GenDownItem(qtype, item, data) {
     let time = new Date().getTime();
     let quality = this.GetQuality(qtype);
     let entry = data.isEp
@@ -127,7 +164,7 @@ class BilibiliApi {
           }
         }
       : {
-          avid: this.source_id,
+          avid: this.GetSourceId(),
           title: data.title,
           cover: data.pic,
           type_tag: quality.quality,
@@ -151,8 +188,8 @@ class BilibiliApi {
       danmaku_count: 3000
     };
     let downitem = {
-      downPath: BilibiliApi.GetAppPath(0),
-      av_id: data.source_id,
+      downPath: this.GetAppPath(0),
+      av_id: this.GetSourceId(),
       episode_id: data.isEp ? item.ep_id : item.page,
       entry_content: Object.assign(finalentry, entry),
       quality: quality.quality,
@@ -165,16 +202,13 @@ class BilibiliApi {
 export default {
   data() {
     return {
-      dllist: null,
-      source_id: null
+      dllist: null
     };
   },
   computed: {
     itemlist() {
       if (this.dllist && typeof this.dllist === "object") {
         if (this.dllist.episodes) this.dllist.isEp = true;
-        if (this.source_id && typeof this.source_id === "object")
-          this.dllist.source_id = this.source_id[0];
         return this.dllist.pages || this.dllist.episodes;
       }
       return false;
@@ -202,36 +236,21 @@ export default {
       //   let info = this.GetLinkInfo("ep183799");
       //   console.log("GetLinkInfo", info)
       // });
-      this.GetLinkInfo("ep183799").then(data => {
-        if (data) {
-          if (data.title.indexOf("僅") !== -1)
-            alert("你下载的是地区专供番，暂未支持下载");
-          this.dllist = data;
-        } else alert("获取数据失败，请检查链接或视频号是否正确");
-      });
+      ({ api: this.api, info: this.info } = new BilibiliApi("ep183799"));
+      if (this.info && this.info instanceof Promise)
+        this.info.then(data => {
+          if (data) {
+            if (data.title.indexOf("僅") !== -1)
+              alert("你下载的是地区专供番，暂未支持下载");
+            this.dllist = data;
+          } else alert("获取数据失败，请检查链接或视频号是否正确");
+        });
     },
-    GetLinkInfo(content) {
-      if (typeof content !== "string") return;
-      let source_id = content.match(/\d{1,9}/);
-      if (!isNaN(source_id)) {
-        let promise = this.Processer(content, source_id);
-        return promise.then(({ data, result }) => data || result);
-      }
-    },
-    Processer(content, source_id) {
-      this.source_id = source_id;
-      return this.GetLinkProcesser(content).call(BilibiliApi, source_id);
-    },
-    GetLinkProcesser(content) {
-      if (content.indexOf("av") !== -1) return BilibiliApi.VideoInfo;
-      else if (content.indexOf("ep") !== -1) return BilibiliApi.EPBengumiInfo;
-      else return BilibiliApi.BengumiInfo;
+    onButtonTap(item) {
+      console.log(this.api.GenDownItem(0, item, this.dllist));
     },
     itemtitle(item) {
       return (item.index || item.page) + "|" + (item.part || item.index_title);
-    },
-    onButtonTap(item) {
-      console.log(BilibiliApi.GenDownItem(0, item, this.dllist));
     }
   }
 };
