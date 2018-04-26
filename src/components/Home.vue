@@ -19,11 +19,13 @@
 
 <script>
 import { getText } from "nativescript-clipboard";
+import { requestPermission } from "nativescript-permissions";
 import * as platform from "tns-core-modules/platform";
 import * as color from "tns-core-modules/color";
-import { android } from "tns-core-modules/application";
+import { android as os } from "tns-core-modules/application";
 import { getJSON, getString } from "tns-core-modules/http";
 import { alert } from "tns-core-modules/ui/dialogs";
+import { Folder } from "tns-core-modules/file-system";
 import md5 from "js-md5";
 
 class BilibiliApi {
@@ -40,7 +42,8 @@ class BilibiliApi {
   }
 
   GetAppPath(type) {
-    return `/sdcard/Android/data/${this.GetClientPackage(type)}/`;
+    let path = android.os.Environment.getExternalStorageDirectory();
+    return `${path}/Android/Data/${this.GetClientPackage(type)}/download/`;
   }
 
   GetQuality(qtype) {
@@ -222,7 +225,7 @@ export default {
       try {
         if (value && platform.device.sdkVersion >= "21") {
           let nativeColor = new color.Color(value).android;
-          let activity = android.foregroundActivity || android.startActivity;
+          let activity = os.foregroundActivity || os.startActivity;
           if (!activity)
             return setTimeout(this.updateBarColor.bind(this, value), 500);
           activity.getWindow().setStatusBarColor(nativeColor);
@@ -232,22 +235,38 @@ export default {
       }
     },
     clipbroad() {
-      // getText().then(content => {
-      //   let info = this.GetLinkInfo("ep183799");
-      //   console.log("GetLinkInfo", info)
-      // });
-      ({ api: this.api, info: this.info } = new BilibiliApi("ep183799"));
-      if (this.info && this.info instanceof Promise)
-        this.info.then(data => {
-          if (data) {
-            if (data.title.indexOf("僅") !== -1)
-              alert("你下载的是地区专供番，暂未支持下载");
-            this.dllist = data;
-          } else alert("获取数据失败，请检查链接或视频号是否正确");
-        });
+      getText().then(content => {
+        ({ api: this.api, info: this.info } = new BilibiliApi(content));
+        if (this.info && this.info instanceof Promise)
+          this.info.then(data => {
+            if (data) {
+              if (data.title.indexOf("僅") !== -1)
+                alert("你下载的是地区专供番，可能需要对应地区网络才能下载");
+              this.dllist = data;
+            } else alert("获取数据失败，请检查链接或视频号是否正确");
+          });
+      });
     },
     onButtonTap(item) {
-      console.log(this.api.GenDownItem(0, item, this.dllist));
+      requestPermission("android.permission.WRITE_EXTERNAL_STORAGE")
+        .then(this.createDownQueue.bind(this, item))
+        .catch(e => alert("创建下载队列时出现错误，请求权限被拒绝"));
+    },
+    createDownQueue(item) {
+      try {
+        let downitem = this.api.GenDownItem(0, item, this.dllist);
+        let subpath = this.dllist.isEp ? downitem.episode_id : downitem.page;
+        let path = `${downitem.downPath}s_${downitem.av_id}/${subpath}/`;
+        let folder = Folder.fromPath(path);
+        let entryjson = JSON.stringify(downitem.entry_content);
+        folder.getFile("entry.json").writeText(entryjson);
+        folder.getFile("danmaku.xml");
+        folder.getFolder(downitem.quality).getFile("index.json");
+        alert("创建下载下载队列成功");
+      } catch (e) {
+        console.log(e);
+        alert("创建下载队列时出现错误，请允许本程序的文件读写权限后再次尝试");
+      }
     },
     itemtitle(item) {
       return (item.index || item.page) + "|" + (item.part || item.index_title);
