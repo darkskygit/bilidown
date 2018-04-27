@@ -2,11 +2,11 @@
   <Page class="page" backgroundSpanUnderStatusBar="true" color="#2c303a">
     <ActionBar class="action-bar btn-primary" title="哔哩下载工具"/>
     <StackLayout>
-      <StackLayout orientation="horizontal">
-        <Button class="btn btn-primary" @tap="clipbroad">从粘贴板读取</Button>
+      <Button class="btn btn-primary" @tap="clipbroad">从粘贴板读取</Button>
+      <FlexboxLayout justifyContent="center">
         <Button class="btn btn-primary" @tap="selectQuality">{{ GetQuality }}</Button>
         <Button class="btn btn-primary" @tap="selectClient">{{ GetClient }}</Button>
-      </StackLayout>
+      </FlexboxLayout>
       <ActivityIndicator :busy="loading" />
       <StackLayout v-if="dllist">
         <FlexboxLayout justifyContent="center">

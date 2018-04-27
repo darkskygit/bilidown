@@ -5,7 +5,9 @@
   "author": "DarkSky <srviewer@foxmail.com>",
   "license": "AGPL-3.0",
   "scripts": {
+    "genkey": "keytool -genkey -v -keystore bilidown.keystore -alias bilidown -keyalg RSA -keysize 2048 -validity 10000",
     "build": "webpack --env.tnsAction build --env.android",
+    "build:release": "npm run clean && npm run build -- --env.release",
     "debug": "webpack --watch --env.tnsAction debug --env.android",
     "watch": "webpack --watch --env.tnsAction run --env.android",
     "clean": "rimraf dist",

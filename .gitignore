@@ -8,3 +8,5 @@ node_modules
 /dist
 
 package-lock\.json
+bilidown.keystore
+bilidown.apk

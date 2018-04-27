@@ -153,7 +153,7 @@ module.exports = env => {
     return [config('android'), config('ios', action)];
   }
 
-  return env.android && config('android', `${action} android`)
+  return env.android && config('android', `${action} android ${env.release ? 'release' : ''}`)
     || env.ios && config('ios', `${action} ios`)
     || {};
 };
